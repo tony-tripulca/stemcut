@@ -1,130 +1,142 @@
 # StemCut — MP3 Stem Remover
 
-StemCut is a local Node.js + Express app with an HTML interface. It accepts an MP3, separates the song into stems using Demucs, removes one selected stem, mixes the remaining stems, and downloads the resulting MP3.
+StemCut is a local web app built with **Node.js, Express, HTML, Demucs CLI, and FFmpeg**. Upload an MP3, choose a stem to remove, and download a new MP3 containing the remaining stems.
 
-## What it supports
+The application's processing workflow is implemented in `server.js`. It launches the installed Demucs command-line executable to separate the audio, then uses FFmpeg to mix the stems that should remain. **This project does not contain a Python processing script or a project-local Python requirements file.** Demucs is an external dependency and may use Python internally in its own environment.
 
-- Remove **Voice** (`vocals`)
-- Remove **Guitars** (`guitar`)
-- Remove **Bass** (`bass`)
-- Remove **Drums** (`drums`)
-- MP3 upload up to 100 MB
-- Browser upload preview and automatic download of the processed MP3
+## Features
 
-The processor uses Demucs' `htdemucs_6s` model because it includes a guitar stem. The model also produces `other` and `piano` stems; those are retained in the final mix. Source separation is AI-based and is not perfect: some leakage or audio artifacts may remain. The model downloads its weights on first use and needs an internet connection for that initial download.
+- Upload MP3 files up to 100 MB
+- Remove one selected stem: vocals, guitar, bass, or drums
+- Display approximate processing progress in the browser
+- Process jobs in the background
+- Automatically download the resulting MP3 when processing completes
+- Store uploads and intermediate files in temporary directories
+- Remove the uploaded source after processing and expire job output after 30 minutes
 
 ## Requirements
 
-- Node.js 20+
-- Python 3.10 or a Python version supported by your installed Demucs/PyTorch
-- FFmpeg with `ffmpeg` available on `PATH`
-- Internet access for the initial Demucs model download
-- Enough memory and disk space to process audio; CPU processing may take several minutes
+- Node.js 20 or newer
+- Demucs installed and runnable from your machine
+- FFmpeg installed and runnable from your machine
+- Internet access the first time the selected Demucs model needs to download its weights
 
-## Install on Ubuntu
-
-### 1. Install system packages
+On Ubuntu, install Node.js and FFmpeg if needed. For example:
 
 ```bash
 sudo apt update
-sudo apt install -y nodejs npm python3 python3-venv python3-pip ffmpeg
+sudo apt install -y nodejs npm ffmpeg
 ```
 
-Check versions:
+Check your installations:
 
 ```bash
 node --version
 npm --version
-python3 --version
 ffmpeg -version
 ```
 
-If your distribution's Node.js is older than 20, install a current Node.js release before proceeding.
+Demucs must be installed separately. If it is installed in a Python virtual environment, you can point StemCut to that environment's `demucs` executable using `DEMUCS_PATH`; you do not need to activate the environment just to launch StemCut when the absolute executable path is configured.
 
-### 2. Install Node.js dependencies
+## Installation
 
-From the project root:
+From the project root, install the Node.js dependencies:
 
 ```bash
 npm install
 ```
 
-### 3. Create a Python virtual environment and install Demucs
+Create your local environment file from the example:
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -r requirements-audio.txt
+cp .env.example .env
 ```
 
-If your Python version is not supported by the current PyTorch/Demucs packages, use a supported Python release and recreate the virtual environment.
+Edit `.env` and set `DEMUCS_PATH` to the actual path of the Demucs executable on your machine. For example:
 
-### 4. Start the app
+```dotenv
+DEMUCS_PATH=/home/your-user/demucs-env/bin/demucs
+DEMUCS_MODEL=htdemucs_6s
+FFMPEG_PATH=ffmpeg
+PORT=3000
+```
 
-Keep the virtual environment activated in the same terminal:
+Replace the example path with your real path. You can check whether it exists with `ls -l /path/to/demucs`. If `demucs` is available on your system `PATH`, you can use `DEMUCS_PATH=demucs` instead.
+
+The real `.env` file is local configuration and is excluded from Git. Keep `.env.example` in the project so the required settings are documented without exposing machine-specific configuration.
+
+## Run StemCut
+
+Start the app:
 
 ```bash
 npm start
 ```
 
-Open http://localhost:3000.
+Open [http://localhost:3000](http://localhost:3000), unless you configured a different `PORT`.
 
-The server invokes `python3` by default. If you start Node from another terminal or process manager, explicitly point it to the virtual-environment interpreter:
-
-```bash
-PYTHON_BIN="$PWD/.venv/bin/python" npm start
-```
-
-On first processing, Demucs downloads its model weights. Wait for the first run to finish; later runs should reuse the downloaded model.
-
-## Development mode
-
-With the Python virtual environment active:
+For development with automatic Node.js restart when server files change:
 
 ```bash
 npm run dev
 ```
+
+The first processing run may take longer because Demucs may need to download the model weights. Processing time depends on the song length and your computer; CPU-only processing can take several minutes or more.
+
+## Why `htdemucs_6s`?
+
+StemCut defaults to `htdemucs_6s` because the six-stem model can produce a separate guitar stem, which enables the guitar-removal option. The remaining stems—including `other` and `piano` when generated—are retained in the final mix. Stem separation is AI-based, so some bleed or artifacts may remain, especially for guitar.
+
+If your installed Demucs version does not support `htdemucs_6s`, use a version that does or change `DEMUCS_MODEL` to a model available in your installation. Note that the guitar-removal option requires a model that outputs `guitar.wav`.
 
 ## Project structure
 
 ```text
 stemcut-node-app/
 ├── public/
-│   └── index.html             # Upload UI, stem selector, API call, download
-├── scripts/
-│   └── process_audio.py       # Runs Demucs and mixes all stems except one
-├── .gitignore
-├── package.json
-├── package-lock.json          # Generated by npm install
-├── requirements-audio.txt     # Python audio dependency
-├── README.md
-└── server.js                  # Express API and static file server
+│   └── index.html       # Upload UI, stem selector, progress, and download flow
+├── .env.example         # Template for local environment variables
+├── .gitignore           # Excludes .env and generated/local files
+├── package.json         # Node.js dependencies and start/dev scripts
+├── package-lock.json    # Generated by npm install (not included initially)
+├── README.md            # Setup and usage instructions
+└── server.js            # Express API, Demucs process, FFmpeg mix, and SSE progress
 ```
 
-## API
+There is no `scripts/process_audio.py` or `requirements-audio.txt` in this project. Audio processing is orchestrated by `server.js`, which invokes the separately installed Demucs and FFmpeg executables.
 
-### `POST /api/process`
+## API endpoints
 
-Multipart form-data fields:
+### `POST /api/jobs`
 
-- `audio`: MP3 file
-- `stem`: one of `vocals`, `guitar`, `bass`, `drums`
+Accepts `multipart/form-data` with these fields:
 
-Successful responses return `audio/mpeg` as a downloadable file. Errors return JSON with an `error` field.
+- `audio`: the MP3 file
+- `stem`: one of `vocals`, `guitar`, `bass`, or `drums`
 
-## Processing notes
+Returns HTTP `202` and a JSON object containing `jobId` when the job is accepted.
 
-- The app runs locally; uploaded files and intermediate outputs are stored temporarily and removed after processing finishes.
-- The upload limit is 100 MB.
-- The app mixes all available stems other than the selected one, including `other` and `piano`. This is intentional so the rest of the song is retained as closely as the model allows.
-- Guitar separation is more experimental than vocals/bass/drums and may have more bleed or artifacts.
-- Do not expose this development server directly to the public internet without adding authentication, rate limiting, stronger resource controls, and production deployment safeguards.
+### `GET /api/progress/:id`
+
+Streams job progress and status using Server-Sent Events (SSE).
+
+### `GET /api/download/:id`
+
+Downloads the processed MP3 after the job has completed successfully. The output is temporary and expires after 30 minutes.
+
+## Processing notes and limitations
+
+- FFmpeg mixes the separated stems; it does not perform the AI source separation itself. Demucs performs the separation.
+- Progress is approximate because the format of Demucs CLI progress output can vary by version.
+- Guitar separation may contain more bleed or artifacts than other stems.
+- Uploaded files and intermediate outputs are stored under the operating system's temporary directory.
+- The app is intended for local use. Do not expose it directly to the public internet without authentication, rate limiting, concurrency/resource limits, and further security hardening.
 
 ## Troubleshooting
 
-- **`No module named demucs`**: activate `.venv` and install `requirements-audio.txt`, then restart the server.
-- **Python is not found / wrong Python environment**: start with `PYTHON_BIN="$PWD/.venv/bin/python" npm start`.
-- **`ffmpeg` not found**: install it with `sudo apt install ffmpeg`.
-- **Processing fails on first run**: check internet access, available disk space, and the server terminal for the Demucs error.
-- **Slow processing**: CPU-only separation can take several minutes or longer depending on song duration and hardware.
+- **Demucs cannot start / `demucs` not found:** Check that Demucs is installed and set `DEMUCS_PATH` in `.env` to the correct executable path.
+- **FFmpeg cannot start:** Install FFmpeg or set `FFMPEG_PATH` to its absolute executable path.
+- **Guitar stem is missing:** Confirm that `DEMUCS_MODEL` is set to a model that outputs a guitar stem, such as `htdemucs_6s`, and that your installed Demucs version supports it.
+- **Model download fails:** Check internet connectivity and available disk space; Demucs may download model weights on first use.
+- **Processing fails:** Check the terminal running `npm start` for the detailed Demucs or FFmpeg error.
+- **Processing is slow:** CPU-only source separation can take several minutes or longer depending on the track length and hardware.
