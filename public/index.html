@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>StemCut — Audio Stem Remover</title>
+  <style>
+    :root {
+      --bg: #101218;
+      --panel: #191d27;
+      --panel-light: #202634;
+      --text: #f4f6fb;
+      --muted: #9ba5b7;
+      --accent: #8b7cff;
+      --accent-hover: #a095ff;
+      --border: #303849;
+      --success: #5dd6a0;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      padding: 36px 18px;
+      background:
+        radial-gradient(ellipse at top, rgba(139, 124, 255, 0.13), transparent 42%),
+        var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    .app {
+      width: min(760px, 100%);
+      margin: 0 auto;
+    }
+
+    header { margin-bottom: 28px; }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 30px;
+      font-size: 18px;
+      font-weight: 750;
+      letter-spacing: -0.4px;
+    }
+
+    .brand-icon {
+      display: grid;
+      place-items: center;
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      background: var(--accent);
+      color: #fff;
+      font-size: 20px;
+    }
+
+    .eyebrow {
+      margin: 0 0 10px;
+      color: var(--accent-hover);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 1.8px;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(32px, 6vw, 48px);
+      line-height: 1.08;
+      letter-spacing: -1.8px;
+    }
+
+    .subtitle {
+      max-width: 590px;
+      margin: 14px 0 0;
+      color: var(--muted);
+      font-size: 16px;
+      line-height: 1.65;
+    }
+
+    .panel {
+      padding: 24px;
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      background: rgba(25, 29, 39, 0.94);
+      box-shadow: 0 18px 60px rgba(0, 0, 0, 0.22);
+    }
+
+    .section-heading {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 0 0 15px;
+      font-size: 16px;
+      font-weight: 700;
+    }
+
+    .step {
+      display: inline-grid;
+      place-items: center;
+      width: 27px;
+      height: 27px;
+      border-radius: 9px;
+      background: var(--panel-light);
+      color: var(--accent-hover);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .dropzone {
+      display: flex;
+      min-height: 190px;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      border: 1.5px dashed #535c73;
+      border-radius: 15px;
+      background: rgba(32, 38, 52, 0.5);
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+    }
+
+    .dropzone:hover, .dropzone.dragover {
+      border-color: var(--accent);
+      background: rgba(139, 124, 255, 0.08);
+    }
+
+    .upload-icon {
+      display: grid;
+      place-items: center;
+      width: 48px;
+      height: 48px;
+      margin-bottom: 12px;
+      border-radius: 14px;
+      background: #2b2a47;
+      color: var(--accent-hover);
+      font-size: 24px;
+    }
+
+    .drop-title { margin: 0; font-size: 15px; font-weight: 700; }
+    .drop-help { margin: 7px 0 0; color: var(--muted); font-size: 13px; }
+    .browse { color: var(--accent-hover); text-decoration: underline; text-underline-offset: 3px; }
+    #audioFile { display: none; }
+
+    .file-info {
+      display: none;
+      margin-top: 14px;
+      padding: 14px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--panel-light);
+    }
+
+    .file-info.visible { display: block; }
+    .file-name { overflow-wrap: anywhere; font-size: 14px; font-weight: 650; }
+    .file-size { margin-top: 5px; color: var(--muted); font-size: 12px; }
+    audio { display: block; width: 100%; margin-top: 12px; }
+
+    .divider { height: 1px; margin: 26px 0; background: var(--border); }
+
+    .section-description {
+      margin: -6px 0 16px 37px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .stem-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .stem-option { position: relative; }
+    .stem-option input {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      opacity: 0;
+    }
+
+    .stem-card {
+      display: flex;
+      min-height: 92px;
+      align-items: center;
+      gap: 13px;
+      padding: 16px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: var(--panel-light);
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s, transform 0.2s;
+    }
+
+    .stem-card:hover { transform: translateY(-1px); border-color: #626c85; }
+    .stem-option input:checked + .stem-card {
+      border-color: var(--accent);
+      background: rgba(139, 124, 255, 0.12);
+      box-shadow: inset 0 0 0 1px var(--accent);
+    }
+
+    .stem-option input:focus-visible + .stem-card {
+      outline: 2px solid white;
+      outline-offset: 3px;
+    }
+
+    .stem-icon {
+      display: grid;
+      place-items: center;
+      flex: 0 0 44px;
+      height: 44px;
+      border-radius: 12px;
+      background: #30374a;
+      font-size: 21px;
+    }
+
+    .stem-name { display: block; font-size: 14px; font-weight: 750; }
+    .stem-detail { display: block; margin-top: 4px; color: var(--muted); font-size: 12px; }
+
+    .selection-summary {
+      margin-top: 14px;
+      padding: 12px 14px;
+      border-radius: 11px;
+      background: rgba(139, 124, 255, 0.08);
+      color: #d8d3ff;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .process-button {
+      display: flex;
+      width: 100%;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      margin-top: 24px;
+      padding: 15px 20px;
+      border: 0;
+      border-radius: 12px;
+      background: var(--accent);
+      color: white;
+      font: inherit;
+      font-size: 15px;
+      font-weight: 750;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.2s;
+    }
+
+    .process-button:hover:not(:disabled) { background: var(--accent-hover); transform: translateY(-1px); }
+    .process-button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    .status {
+      display: none;
+      margin-top: 16px;
+      padding: 14px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .status.visible { display: block; }
+    .status strong { color: var(--text); }
+
+    .note {
+      margin: 18px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.6;
+      text-align: center;
+    }
+
+    @media (max-width: 520px) {
+      body { padding: 22px 12px; }
+      .panel { padding: 17px; border-radius: 16px; }
+      .stem-grid { grid-template-columns: 1fr; }
+      .stem-card { min-height: 78px; }
+      .section-description { margin-left: 0; margin-top: 0; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header>
+      <div class="brand">
+        <div class="brand-icon" aria-hidden="true">♫</div>
+        <span>StemCut</span>
+      </div>
+      <p class="eyebrow">Audio stem remover</p>
+      <h1>Make room for<br />the sound you want.</h1>
+      <p class="subtitle">
+        Upload a song and choose one part to remove. Keep the rest of the music together in one track.
+      </p>
+    </header>
+
+    <section class="panel" aria-label="Audio stem remover">
+      <div>
+        <h2 class="section-heading"><span class="step">01</span> Upload your audio</h2>
+        <label class="dropzone" id="dropzone" for="audioFile">
+          <span class="upload-icon" aria-hidden="true">↑</span>
+          <span class="drop-title">Drop your MP3 file here</span>
+          <span class="drop-help">or <span class="browse">browse files</span> on your device</span>
+          <span class="drop-help">MP3 format · Choose one audio file</span>
+        </label>
+        <input id="audioFile" type="file" accept=".mp3,audio/mpeg" />
+        <div class="file-info" id="fileInfo" aria-live="polite">
+          <div class="file-name" id="fileName"></div>
+          <div class="file-size" id="fileSize"></div>
+          <audio id="audioPreview" controls preload="metadata"></audio>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div>
+        <h2 class="section-heading"><span class="step">02</span> Choose what to remove</h2>
+        <p class="section-description">Select one stem. The other three should remain in the final audio.</p>
+
+        <div class="stem-grid" role="radiogroup" aria-label="Stem to remove">
+          <label class="stem-option">
+            <input type="radio" name="stem" value="vocals" checked />
+            <span class="stem-card">
+              <span class="stem-icon" aria-hidden="true">🎤</span>
+              <span><span class="stem-name">Voice</span><span class="stem-detail">Remove vocals</span></span>
+            </span>
+          </label>
+
+          <label class="stem-option">
+            <input type="radio" name="stem" value="guitar" />
+            <span class="stem-card">
+              <span class="stem-icon" aria-hidden="true">🎸</span>
+              <span><span class="stem-name">Guitars</span><span class="stem-detail">Remove guitars</span></span>
+            </span>
+          </label>
+
+          <label class="stem-option">
+            <input type="radio" name="stem" value="bass" />
+            <span class="stem-card">
+              <span class="stem-icon" aria-hidden="true">🎸</span>
+              <span><span class="stem-name">Bass</span><span class="stem-detail">Remove bass</span></span>
+            </span>
+          </label>
+
+          <label class="stem-option">
+            <input type="radio" name="stem" value="drums" />
+            <span class="stem-card">
+              <span class="stem-icon" aria-hidden="true">🥁</span>
+              <span><span class="stem-name">Drums</span><span class="stem-detail">Remove drums</span></span>
+            </span>
+          </label>
+        </div>
+
+        <div class="selection-summary" id="selectionSummary" aria-live="polite">
+          <strong>Selected:</strong> Remove voice · Keep guitars, bass, and drums.
+        </div>
+      </div>
+
+      <button class="process-button" id="processButton" type="button" disabled>
+        <span aria-hidden="true">✦</span> Process audio
+      </button>
+
+      <div class="status" id="status" role="status" aria-live="polite"></div>
+      <p class="note">Audio is processed by the local server. Separation quality depends on the source recording and model.</p>
+    </section>
+  </main>
+
+  <script>
+    const fileInput = document.getElementById("audioFile");
+    const dropzone = document.getElementById("dropzone");
+    const fileInfo = document.getElementById("fileInfo");
+    const fileName = document.getElementById("fileName");
+    const fileSize = document.getElementById("fileSize");
+    const audioPreview = document.getElementById("audioPreview");
+    const processButton = document.getElementById("processButton");
+    const selectionSummary = document.getElementById("selectionSummary");
+    const status = document.getElementById("status");
+
+    let selectedFile = null;
+    let previewUrl = null;
+
+    const stemNames = {
+      vocals: "voice",
+      guitar: "guitars",
+      bass: "bass",
+      drums: "drums"
+    };
+
+    function formatBytes(bytes) {
+      if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+      return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+    }
+
+    function getSelectedStem() {
+      return document.querySelector('input[name="stem"]:checked').value;
+    }
+
+    function updateSelectionSummary() {
+      const selected = getSelectedStem();
+      const kept = Object.values(stemNames).filter((name) => name !== stemNames[selected]);
+      const keptText = kept.length > 1
+        ? `${kept.slice(0, -1).join(", ")}, and ${kept[kept.length - 1]}`
+        : kept[0];
+
+      selectionSummary.innerHTML =
+        `<strong>Selected:</strong> Remove ${stemNames[selected]} · Keep ${keptText}.`;
+    }
+
+    function showFile(file) {
+      if (!file) return;
+
+      const isMp3 = file.type === "audio/mpeg" || file.name.toLowerCase().endsWith(".mp3");
+      if (!isMp3) {
+        status.textContent = "Please choose an MP3 file.";
+        status.classList.add("visible");
+        return;
+      }
+
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      selectedFile = file;
+      previewUrl = URL.createObjectURL(file);
+
+      fileName.textContent = file.name;
+      fileSize.textContent = formatBytes(file.size);
+      audioPreview.src = previewUrl;
+      fileInfo.classList.add("visible");
+      processButton.disabled = false;
+      status.classList.remove("visible");
+    }
+
+    fileInput.addEventListener("change", (event) => {
+      showFile(event.target.files[0]);
+    });
+
+    ["dragenter", "dragover"].forEach((eventName) => {
+      dropzone.addEventListener(eventName, (event) => {
+        event.preventDefault();
+        dropzone.classList.add("dragover");
+      });
+    });
+
+    ["dragleave", "drop"].forEach((eventName) => {
+      dropzone.addEventListener(eventName, (event) => {
+        event.preventDefault();
+        dropzone.classList.remove("dragover");
+      });
+    });
+
+    dropzone.addEventListener("drop", (event) => {
+      const file = event.dataTransfer.files[0];
+      if (file) showFile(file);
+    });
+
+    document.querySelectorAll('input[name="stem"]').forEach((input) => {
+      input.addEventListener("change", updateSelectionSummary);
+    });
+
+    processButton.addEventListener("click", async () => {
+      if (!selectedFile) return;
+
+      const selected = getSelectedStem();
+      const formData = new FormData();
+      formData.append("audio", selectedFile);
+      formData.append("stem", selected);
+
+      processButton.disabled = true;
+      processButton.innerHTML = '<span aria-hidden="true">⏳</span> Processing audio…';
+      status.textContent = "Uploading MP3…";
+      status.classList.add("visible");
+
+      let events;
+      try {
+        const response = await fetch("/api/jobs", {
+          method: "POST",
+          body: formData
+        });
+
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload.error || "Could not start audio processing.");
+
+        const jobId = payload.jobId;
+        status.textContent = "Audio separation started…";
+
+        events = new EventSource(`/api/progress/${encodeURIComponent(jobId)}`);
+        events.onmessage = async (event) => {
+          const job = JSON.parse(event.data);
+
+          if (job.error) {
+            events.close();
+            status.textContent = job.error;
+            processButton.disabled = !selectedFile;
+            processButton.innerHTML = '<span aria-hidden="true">✦</span> Process audio';
+            return;
+          }
+
+          if (job.done) {
+            events.close();
+            status.textContent = "Processing complete. Your download should start now.";
+            const link = document.createElement("a");
+            link.href = `/api/download/${encodeURIComponent(jobId)}`;
+            link.download = job.filename || "stemcut-result.mp3";
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            processButton.disabled = !selectedFile;
+            processButton.innerHTML = '<span aria-hidden="true">✦</span> Process audio';
+            return;
+          }
+
+          const progress = Number.isFinite(job.progress) ? job.progress : 0;
+          status.textContent = job.message || `Separating audio… ${progress}%`;
+        };
+
+        events.onerror = () => {
+          // EventSource automatically reconnects; the server sends current job state.
+          status.textContent = "Waiting for processing updates…";
+        };
+      } catch (error) {
+        if (events) events.close();
+        status.textContent = error.message || "Something went wrong while processing the audio.";
+        processButton.disabled = !selectedFile;
+        processButton.innerHTML = '<span aria-hidden="true">✦</span> Process audio';
+      }
+    });
+  </script>
+</body>
+</html>
